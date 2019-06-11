@@ -1,3 +1,5 @@
+module Cond
+
 sig Veiculo {}
 
 abstract sig Morador {
@@ -10,7 +12,7 @@ sig MoradorTitular extends Morador {
 
 sig MoradorDependente extends Morador {}
 
-sig Condominio {
+one sig Condominio {
 	moradores: set Morador
 }
 
@@ -23,24 +25,63 @@ fact todoMoradorPertenceAoCondominio {
 }
 
 fact moradorDependenteDeUmTitular {
-	all d: MoradorDependente | # d.~dependentes = 1
+	all d: MoradorDependente | one d.~dependentes
 }
 
 fact veiculoTemPeloMenosUmMorador {
-	all v: Veiculo | one t: MoradorTitular | t in v.~veiculos
+	all v: Veiculo | one m: Morador | m in v.~veiculos
 }
 
 fact limiteVeiculosTemporarios {
-	all m: Morador | # m.veiculos <= 2
+	all t: MoradorTitular | # veiculosDoMorador[t] <= 2
 }
 
 fact moradoresTitularesVeiculosDiferentes {
 	all t1: MoradorTitular | all t2: MoradorTitular | t1 != t2 implies t1.veiculos != t2.veiculos
 }
 
-fact mesmoVeiculos {
-	all t: MoradorTitular | all d: t.dependentes | t.veiculos = d.veiculos
-} 
+fact veiculoDeDependenteTemRegistrador {
+	all v: Veiculo | (v.~veiculos in MoradorDependente) => one v.~veiculos.~dependentes
+}
+
+-- FUNS
+fun veiculosDoMorador(m: Morador): set Veiculo {
+	(m.veiculos + m.dependentes.veiculos)
+}
+
+fun proprietario(v: Veiculo): Morador {
+	v.~veiculos
+}
+
+fun registradoNoNomeDe(v: Veiculo): MoradorTitular {
+	v.~veiculos.~dependentes
+}
+
+-- ASSERTS
+assert veiculoTemDonoNoCondominio {
+	all v: Veiculo | v.~veiculos in Condominio.moradores
+}
+
+assert maximoDoisVeiculosPorMorador {
+	all m: Morador | # veiculosDoMorador[m] <= 2
+}
+
+assert totalDeVeiculosEhValido {
+	(# Veiculo) <= mul[# MoradorTitular, 2]
+}
+
+-- PREDS
+pred temVeiculoRegistrado(m: Morador) {
+	# veiculosDoMorador[m] > 0
+}
+
+pred podeRegistrarVeiculo(m: Morador) {
+	# veiculosDoMorador[m] < 2
+}
+
+pred ehDono(m: Morador, v: Veiculo) {
+	m = proprietario[v]
+}
 
 pred show [] {}
 
