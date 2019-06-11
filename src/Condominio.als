@@ -16,10 +16,6 @@ one sig Condominio {
 	moradores: set Morador
 }
 
-fact exatamenteUmCondominio {
-	# Condominio = 1
-}
-
 fact todoMoradorPertenceAoCondominio {
 	all m: Morador | one m.~moradores
 }
@@ -53,8 +49,8 @@ fun proprietario(v: Veiculo): Morador {
 	v.~veiculos
 }
 
-fun registradoNoNomeDe(v: Veiculo): MoradorTitular {
-	v.~veiculos.~dependentes
+fun registrador(v: Veiculo): MoradorTitular {
+	v.~veiculos.~dependentes + v.~veiculos - MoradorDependente
 }
 
 -- ASSERTS
@@ -70,6 +66,10 @@ assert totalDeVeiculosEhValido {
 	(# Veiculo) <= mul[# MoradorTitular, 2]
 }
 
+assert registradorCorreto {
+	all v: Veiculo | v.proprietario in MoradorDependente => v.proprietario in v.proprietario.~dependentes.dependentes
+}
+
 -- PREDS
 pred temVeiculoRegistrado(m: Morador) {
 	# veiculosDoMorador[m] > 0
@@ -79,10 +79,12 @@ pred podeRegistrarVeiculo(m: Morador) {
 	# veiculosDoMorador[m] < 2
 }
 
-pred ehDono(m: Morador, v: Veiculo) {
+pred ehProprietario(m: Morador, v: Veiculo) {
 	m = proprietario[v]
 }
 
 pred show [] {}
+
+check registradorCorreto for 10
 
 run show for 10
