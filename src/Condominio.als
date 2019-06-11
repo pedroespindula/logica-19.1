@@ -27,7 +27,7 @@ fact moradorDependenteDeUmTitular {
 }
 
 fact veiculoTemPeloMenosUmMorador {
-	all v: Veiculo | some v.~veiculos
+	all v: Veiculo | one t: MoradorTitular | t in v.~veiculos
 }
 
 fact limiteVeiculosTemporarios {
