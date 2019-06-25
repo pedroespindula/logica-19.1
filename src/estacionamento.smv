@@ -1,0 +1,53 @@
+MODULE cancela(areaAtual, areaEntrada, areaSaida, sentidoCarro)
+VAR
+  estado : {aberto, fechado};
+ASSIGN
+  init(estado) := fechado;
+  next(estado) :=
+    case
+      areaAtual = areaEntrada & sentidoCarro = entrando : aberto;
+      areaAtual = areaSaida & sentidoCarro = saindo : aberto;
+      TRUE : fechado;
+    esac;
+
+MODULE main 
+VAR
+  lotado : boolean;
+  sentidoCarro : {entrando, saindo, semCarro};
+  areaCarro : {entrada, cancelaEntrada, entreCancelas, cancelaSaida, saida, semCarro};
+  cancela1 : process cancela(areaCarro, cancelaEntrada, entreCancelas, sentidoCarro);
+  cancela2 : process cancela(areaCarro, entreCancelas, cancelaSaida, sentidoCarro);
+ASSIGN
+  init(lotado) := FALSE;
+  next(lotado) := 
+    case
+      lotado & sentidoCarro = saindo : FALSE;
+      !lotado & sentidoCarro = entrando & areaCarro = saida : {FALSE, TRUE};
+      TRUE : lotado;
+    esac;
+  init(sentidoCarro) := semCarro;
+  next(sentidoCarro) :=
+    case
+      sentidoCarro = semCarro & areaCarro = entrada : entrando;
+      sentidoCarro = semCarro & areaCarro = saida : saindo;
+      sentidoCarro = entrando & areaCarro = saida : semCarro;
+      sentidoCarro = saindo & areaCarro = entrada : semCarro;
+      TRUE : sentidoCarro;
+    esac;
+  init(areaCarro) := semCarro;
+  next(areaCarro) :=
+    case
+      areaCarro = entrada & sentidoCarro = entrando : cancelaEntrada;
+      areaCarro = cancelaEntrada & sentidoCarro = entrando & cancela1.estado = aberto : entreCancelas;
+      areaCarro = entreCancelas & sentidoCarro = entrando & cancela2.estado = aberto : cancelaSaida;
+      areaCarro = cancelaSaida & sentidoCarro = entrando : semCarro;
+      
+      areaCarro = saida & sentidoCarro = saindo : cancelaSaida;
+      areaCarro = cancelaSaida & sentidoCarro = saindo & cancela2.estado = aberto : entreCancelas;
+      areaCarro = entreCancelas & sentidoCarro = saindo & cancela1.estado = aberto : cancelaEntrada;
+      areaCarro = cancelaEntrada & sentidoCarro = saindo : semCarro;
+
+      areaCarro = semCarro : {entrada, saida};
+      TRUE : areaCarro;
+    esac;
+    
