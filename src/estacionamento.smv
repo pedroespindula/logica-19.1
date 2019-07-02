@@ -1,53 +1,80 @@
-MODULE cancela(areaAtual, areaEntrada, areaSaida, sentidoCarro)
+MODULE cancela(areaAtual, areaEntrada, areaSaida, sentidoCarro, existeCancelaAberta)
 VAR
-  estado : {aberto, fechado};
+  aberto : boolean;
 ASSIGN
-  init(estado) := fechado;
-  next(estado) :=
-    case
-      areaAtual = areaEntrada & sentidoCarro = entrando : aberto;
-      areaAtual = areaSaida & sentidoCarro = saindo : aberto;
-      TRUE : fechado;
-    esac;
+  init(aberto) := FALSE;
+  next(aberto) := areaAtual = areaEntrada & sentidoCarro = entrando & !existeCancelaAberta |
+                  areaAtual = areaSaida & sentidoCarro = saindo & !existeCancelaAberta;
 
-MODULE main 
+
+MODULE semaforo(areaCarro, podeAbrir)
 VAR
-  lotado : boolean;
-  sentidoCarro : {entrando, saindo, semCarro};
-  areaCarro : {entrada, cancelaEntrada, entreCancelas, cancelaSaida, saida, semCarro};
-  cancela1 : process cancela(areaCarro, cancelaEntrada, entreCancelas, sentidoCarro);
-  cancela2 : process cancela(areaCarro, entreCancelas, cancelaSaida, sentidoCarro);
+  temCarroEsperando : boolean;
+  estaAberto : boolean;
 ASSIGN
-  init(lotado) := FALSE;
-  next(lotado) := 
+  init(temCarroEsperando) := FALSE;
+  init(estaAberto) := FALSE;
+
+  next(temCarroEsperando) :=
     case
-      lotado & sentidoCarro = saindo : FALSE;
-      !lotado & sentidoCarro = entrando & areaCarro = saida : {FALSE, TRUE};
-      TRUE : lotado;
+      !temCarroEsperando : {FALSE, TRUE};
+      TRUE : temCarroEsperando;
     esac;
+  next(estaAberto) := temCarroEsperando & areaCarro = semCarro & podeAbrir;
+
+
+MODULE cancelas(semaforoEntrada, semaforoSaida)
+VAR
+  sentidoCarro : {entrando, saindo, semCarro};
+  areaCarro : {cancelaEntrada, entreCancelas, cancelaSaida, semCarro};
+  cancela1 : process cancela(areaCarro, cancelaEntrada, entreCancelas, sentidoCarro, cancela2.aberto);
+  cancela2 : process cancela(areaCarro, entreCancelas, cancelaSaida, sentidoCarro, cancela1.aberto);
+ASSIGN
   init(sentidoCarro) := semCarro;
+  init(areaCarro) := semCarro;
+
   next(sentidoCarro) :=
     case
-      sentidoCarro = semCarro & areaCarro = entrada : entrando;
-      sentidoCarro = semCarro & areaCarro = saida : saindo;
-      sentidoCarro = entrando & areaCarro = saida : semCarro;
-      sentidoCarro = saindo & areaCarro = entrada : semCarro;
+      sentidoCarro = semCarro & semaforoEntrada.estaAberto : entrando;
+      sentidoCarro = semCarro & semaforoSaida.estaAberto : saindo;
       TRUE : sentidoCarro;
     esac;
-  init(areaCarro) := semCarro;
+
   next(areaCarro) :=
     case
-      areaCarro = entrada & sentidoCarro = entrando : cancelaEntrada;
-      areaCarro = cancelaEntrada & sentidoCarro = entrando & cancela1.estado = aberto : entreCancelas;
-      areaCarro = entreCancelas & sentidoCarro = entrando & cancela2.estado = aberto : cancelaSaida;
-      areaCarro = cancelaSaida & sentidoCarro = entrando : semCarro;
-      
-      areaCarro = saida & sentidoCarro = saindo : cancelaSaida;
-      areaCarro = cancelaSaida & sentidoCarro = saindo & cancela2.estado = aberto : entreCancelas;
-      areaCarro = entreCancelas & sentidoCarro = saindo & cancela1.estado = aberto : cancelaEntrada;
-      areaCarro = cancelaEntrada & sentidoCarro = saindo : semCarro;
+      areaCarro = semCarro & semaforoEntrada.estaAberto : cancelaEntrada;
+      areaCarro = semCarro & semaforoSaida.estaAberto : cancelaSaida;
 
-      areaCarro = semCarro : {entrada, saida};
+      sentidoCarro = entrando & areaCarro = cancelaEntrada & cancela1.aberto : entreCancelas;
+      sentidoCarro = entrando & areaCarro = entreCancelas & cancela2.aberto : cancelaSaida;
+      sentidoCarro = entrando & areaCarro = cancelaSaida : semCarro;
+      
+      sentidoCarro = saindo & areaCarro = cancelaSaida & cancela2.aberto : entreCancelas;
+      sentidoCarro = saindo & areaCarro = entreCancelas & cancela1.aberto : cancelaEntrada;
+      sentidoCarro = saindo & areaCarro = cancelaEntrada : semCarro;
+
       TRUE : areaCarro;
     esac;
-    
+
+
+MODULE main
+VAR
+  lotado : boolean;
+  portaoCancela : process cancelas(semaforoEntrada, semaforoSaida);
+  semaforoEntrada : process semaforo(portaoCancela.areaCarro, semaforoSaida.estaAberto);
+  semaforoSaida : process semaforo(portaoCancela.areaCarro, TRUE);
+ASSIGN
+  init(lotado) := FALSE;
+  next(lotado) :=
+    case
+      lotado & portaoCancela.sentidoCarro = saindo : FALSE;
+      !lotado & portaoCancela.sentidoCarro = entrando & portaoCancela.areaCarro = saindo : {FALSE, TRUE};
+      TRUE : lotado;
+    esac;
+
+SPEC AX (!(portaoCancela.cancela1.aberto & portaoCancela.cancela2.aberto));
+SPEC AX (!(semaforoEntrada.estaAberto & semaforoSaida.estaAberto));
+
+SPEC portaoCancela.areaCarro = entreCancelas -> AX (portaoCancela.areaCarro = cancelaEntrada | portaoCancela = cancelaSaida) & AX (portaoCancela.areaCarro = semCarro);
+SPEC semaforoEntrada.estaAberto -> AX (portaoCancela.areaCarro = entreCancelas);
+SPEC (portaoCancela.sentidoCarro = entrando & portaoCancela.areaCarro = cancelaSaida) -> (AX portaoCancela.areaCarro = semCarro & portaoCancela.sentidoCarro = semCarro);
